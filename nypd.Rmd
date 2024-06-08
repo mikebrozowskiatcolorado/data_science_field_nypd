@@ -1,0 +1,107 @@
+---
+title: "NYPD"
+author: "Mike Brozowski"
+date: "2024-06-04"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(lubridate)
+url = "https://data.cityofnewyork.us/api/views/833y-fsy8/rows.csv?accessType=DOWNLOAD"
+nypd_data = read_csv(url)
+```
+
+# Visual 1: Average Incidents Per Month
+
+The following visual shows the average number of incidents per month. These mean values were found over the years in which data was available. The purpose of this visual is to see how months or seasons correlate to incidents. The data shown here suggests a significant bias towards increased incidents during the summer months.
+
+```{r visual_1}
+
+visual_1_data = nypd_data %>%
+  mutate(year = year(mdy(OCCUR_DATE)), month = month(mdy(OCCUR_DATE))) %>%
+  group_by(year, month) %>%
+  count() %>%
+  ungroup()
+
+visual_1_year_count = visual_1_data %>%
+  count(month) %>%
+  rename(year_count = n)
+
+visual_1_incident_count = visual_1_data %>%
+  group_by(month) %>%
+  summarize(incident_count = sum(n))
+
+joined_1 = full_join(visual_1_year_count, visual_1_incident_count, by="month")
+
+visual_1_average_count = joined_1 %>%
+  group_by(month) %>%
+  summarize(mean_incident_count = (incident_count / year_count))
+
+ggplot(visual_1_average_count, aes(x=month,y=mean_incident_count)) + geom_path()
+
+```
+
+# Visual 2: Average Incidents Per Month Per Borough
+
+The following visual shows the average number of incidents per month per borough. These mean values were found over the years in which data was available. The purpose of this visual is to see how months or seasons correlate to incidents in each borough. The data shown here suggests a significant bias towards increased incidents during the summer months, but primarily only for Bronx and Brooklyn, while the other boroughs are relatively constant year-round.
+
+```{r visual_2}
+
+visual_2_data = nypd_data %>%
+  mutate(year = year(mdy(OCCUR_DATE)), month = month(mdy(OCCUR_DATE))) %>%
+  group_by(year, month, BORO) %>%
+  count() %>%
+  ungroup()
+
+visual_2_year_count = visual_2_data %>%
+  select(year,month) %>%
+  distinct(year,month) %>%
+  count(month) %>%
+  rename(year_count = n)
+
+visual_2_incident_count = visual_2_data %>%
+  group_by(month, BORO) %>%
+  summarize(incident_count = sum(n))
+
+joined_2 = full_join(visual_2_year_count, visual_2_incident_count, by="month")
+
+visual_2_average_count = joined_2 %>%
+  group_by(month, BORO) %>%
+  summarize(mean_incident_count = (incident_count / year_count))
+
+ggplot(visual_2_average_count, aes(x=month,y=mean_incident_count,group=BORO,color=factor(BORO))) + geom_path()
+
+```
+
+# Model 1: Incidents Through Years
+
+The following model shows the number of incidents per year. The purpose of this visual is to see long-term trends in incident happenings. While the actual data (red) through the years has had drastic increases and decreases, the model (blue) line has stayed nearly constant.
+
+```{r model_1}
+
+visual_3_data = nypd_data %>%
+  mutate(year = year(mdy(OCCUR_DATE))) %>%
+  group_by(year) %>%
+  count() %>%
+  rename(incident_count = n) %>%
+  ungroup()
+
+model = lm(incident_count ~ year, data = visual_3_data)
+summary(model)
+
+visual_3_modeled_data = visual_3_data %>%
+  mutate(prediction = predict(model))
+
+visual_3_modeled_data %>% ggplot() +
+  geom_point(aes(x=year,y=incident_count,color="blue")) +
+  geom_path(aes(x=year,y=prediction,color="red"))
+
+```
+
+```{r footer}
+sessionInfo()
+```
